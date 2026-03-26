@@ -1,0 +1,11 @@
+fastapi>=0.104.0
+uvicorn>=0.24.0
+agentscope>=1.0.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+openai>=1.12.0
+
+# 安装说明：
+# 使用清华镜像源加速安装：
+# uv pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
