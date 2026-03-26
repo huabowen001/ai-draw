@@ -5,30 +5,59 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
-DEFAULT_BACKEND_PORT=8001
-DEFAULT_FRONTEND_PORT=3000
+DEFAULT_BACKEND_PORT=8080
+DEFAULT_LLM_BASE_URL="https://api.deepseek.com/v1"
+DEFAULT_LLM_MODEL_NAME="deepseek-chat"
 
 show_usage() {
-    echo "用法: $0 [后端端口] [前端端口]"
+    echo "用法: $0 [选项]"
+    echo ""
+    echo "选项:"
+    echo "  --llm-base-url URL       LLM API 地址 (默认: https://api.deepseek.com/v1)"
+    echo "  --llm-api-key KEY        LLM API 密钥"
+    echo "  --llm-model-name NAME    LLM 模型名称 (默认: deepseek-chat)"
+    echo "  -h, --help               显示帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0              # 使用默认端口 (后端: 8001, 前端: 3000)"
-    echo "  $0 9000         # 后端端口 9000, 前端默认 3000"
-    echo "  $0 9000 8080    # 后端端口 9000, 前端端口 8080"
-    exit 1
+    echo "  $0                       # 使用默认配置"
+    echo "  $0 --llm-api-key sk-xxx  # 配置 API 密钥"
+    echo ""
+    echo "环境变量:"
+    echo "  LLM_BASE_URL    LLM API 地址"
+    echo "  LLM_API_KEY     LLM API 密钥"
+    echo "  LLM_MODEL_NAME  LLM 模型名称"
+    exit 0
 }
 
-if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-    show_usage
-fi
+BACKEND_PORT=$DEFAULT_BACKEND_PORT
+FRONTEND_PORT=3000
+LLM_BASE_URL="${LLM_BASE_URL:-$DEFAULT_LLM_BASE_URL}"
+LLM_API_KEY="${LLM_API_KEY:-}"
+LLM_MODEL_NAME="${LLM_MODEL_NAME:-$DEFAULT_LLM_MODEL_NAME}"
 
-BACKEND_PORT=${1:-$DEFAULT_BACKEND_PORT}
-FRONTEND_PORT=${2:-$DEFAULT_FRONTEND_PORT}
-
-if ! [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]] || ! [[ "$FRONTEND_PORT" =~ ^[0-9]+$ ]]; then
-    echo "错误: 端口必须是数字"
-    show_usage
-fi
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --llm-base-url)
+            LLM_BASE_URL="$2"
+            shift 2
+            ;;
+        --llm-api-key)
+            LLM_API_KEY="$2"
+            shift 2
+            ;;
+        --llm-model-name)
+            LLM_MODEL_NAME="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_usage
+            ;;
+        *)
+            echo "未知参数: $1"
+            show_usage
+            ;;
+    esac
+done
 
 echo "=========================================="
 echo "  智能画图助手 - 一键启动脚本"
@@ -59,6 +88,18 @@ start_backend() {
     
     source .venv/bin/activate
     
+    export LLM_BASE_URL="$LLM_BASE_URL"
+    export LLM_API_KEY="$LLM_API_KEY"
+    export LLM_MODEL_NAME="$LLM_MODEL_NAME"
+    
+    echo "  LLM_BASE_URL: $LLM_BASE_URL"
+    echo "  LLM_MODEL_NAME: $LLM_MODEL_NAME"
+    if [ -n "$LLM_API_KEY" ]; then
+        echo "  LLM_API_KEY: 已配置"
+    else
+        echo "  LLM_API_KEY: 未配置"
+    fi
+    
     uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
     BACKEND_PID=$!
     echo "  后端服务已启动 (PID: $BACKEND_PID)"
@@ -69,15 +110,7 @@ start_frontend() {
     echo ">>> 启动前端服务 (端口: $FRONTEND_PORT)..."
     cd "$FRONTEND_DIR"
     
-    API_URL="http://localhost:${BACKEND_PORT}/api/v1"
-    
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|http://localhost:[0-9]*/api/v1|${API_URL}|g" app.js
-    else
-        sed -i "s|http://localhost:[0-9]*/api/v1|${API_URL}|g" app.js
-    fi
-    
-    echo "  前端 API 地址已配置为: $API_URL"
+    echo "  前端 API 地址: http://localhost:${BACKEND_PORT}/api/v1"
     
     python3 -m http.server "$FRONTEND_PORT" --directory "$FRONTEND_DIR" &
     FRONTEND_PID=$!
