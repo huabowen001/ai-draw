@@ -20,7 +20,7 @@ class DrawAgent:
     
     def __init__(self):
         self.toolkit = Toolkit()
-        skill_dir = Path(__file__).parent.parent / "agent" / "skills" / "drawio-creator"
+        skill_dir = Path(__file__).parent.parent / "skills" / "drawio-creator"
         if skill_dir.exists():
             self.toolkit.register_agent_skill(str(skill_dir))
         
@@ -32,9 +32,17 @@ class DrawAgent:
     
     def _create_agent(self) -> ReActAgent:
         """创建 ReActAgent 实例"""
+        sys_prompt = """你是一个专业的绘图助手，能够根据用户需求生成和优化 draw.io XML 图表，根据用户需求生成符合规范的 draw.io XML 内容
+
+重要规则：
+- 使用 drawio-creator skill 来生成图表
+- 先生成图标大纲，再根据大纲逐步补全图表 XML
+- 最终输出完整的、格式正确的 draw.io XML 内容，从 <mxfile> 开始到 </mxfile> 结束
+- 如果用户提供了现有的 XML，则进行优化和修改"""
+        
         return ReActAgent(
             name="DrawAgent",
-            sys_prompt="你是一个专业的绘图助手，能够根据用户需求生成和优化 draw.io XML 图表。你需要：\n1. 理解用户的绘图需求\n2. 分析需要创建的图表类型（流程图、架构图、时序图等）\n3. 生成符合 draw.io 规范的 XML 内容\n4. 如果用户提供了现有的 XML，则进行优化和修改\n\n请始终输出完整的、格式正确的 draw.io XML 内容。",
+            sys_prompt=sys_prompt,
             model=OpenAIChatModel(
                 model_name=self.llm_config["model_name"],
                 api_key=self.llm_config["api_key"],
@@ -132,21 +140,33 @@ class DrawAgent:
     def _extract_xml_from_response(self, response_content: str) -> Optional[str]:
         """从响应内容中提取 XML"""
         if not response_content:
+            print("DEBUG: response_content is empty")
             return None
+        
+        print(f"DEBUG: Extracting XML from response (length: {len(response_content)})")
         
         xml_start = response_content.find('<mxfile')
         if xml_start == -1:
             xml_start = response_content.find('<?xml')
         
         if xml_start == -1:
+            print("DEBUG: No <mxfile or <?xml found")
             return None
+        
+        print(f"DEBUG: Found XML start at position {xml_start}")
         
         xml_end = response_content.find('</mxfile>', xml_start)
         if xml_end == -1:
+            print("DEBUG: No </mxfile> found - XML may be truncated")
+            print(f"DEBUG: Last 200 chars: {response_content[-200:]}")
             return None
         
         xml_end += len('</mxfile>')
         xml_content = response_content[xml_start:xml_end]
+        
+        print(f"DEBUG: Extracted XML length: {len(xml_content)}")
+        print(f"DEBUG: XML starts with: {xml_content[:100]}")
+        print(f"DEBUG: XML ends with: {xml_content[-100:]}")
         
         return xml_content
     
